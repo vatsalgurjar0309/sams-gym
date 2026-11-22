@@ -1,0 +1,1313 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SAM'S GYM — 3D Member Management System</title>
+    
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Google Fonts: Montserrat & Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Montserrat:ital,wght@0,700;0,800;0,900;1,900&display=swap" rel="stylesheet">
+    
+    <!-- Three.js (WebGL 3D Core) CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    
+    <!-- Supabase JS v2 CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    
+    <!-- Lucide Icons CDN -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        display: ['Montserrat', 'sans-serif'],
+                    },
+                    colors: {
+                        obsidian: {
+                            DEFAULT: '#050507',
+                            card: '#0f1117',
+                            border: '#1e2230',
+                            hover: '#161923'
+                        },
+                        neon: {
+                            DEFAULT: '#39ff14',
+                            glow: '#39ff14',
+                            lime: '#a3e635',
+                            dark: '#1e800a'
+                        }
+                    },
+                    boxShadow: {
+                        'neon-glow': '0 0 25px -5px rgba(57, 255, 20, 0.4)',
+                        'neon-sm': '0 0 10px rgba(57, 255, 20, 0.3)',
+                        'glass': '0 8px 32px 0 rgba(0, 0, 0, 0.5)'
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        body {
+            background-color: #050507;
+            color: #f3f4f6;
+            overflow-x: hidden;
+        }
+
+        #bg-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 0;
+            pointer-events: none;
+        }
+
+        .glass-panel {
+            background: rgba(15, 17, 23, 0.75);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .glass-card-interactive {
+            background: rgba(15, 17, 23, 0.85);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            transform-style: preserve-3d;
+        }
+
+        .glass-card-interactive:hover {
+            border-color: rgba(57, 255, 20, 0.4);
+            box-shadow: 0 12px 30px -10px rgba(57, 255, 20, 0.25);
+            transform: translateY(-2px);
+        }
+
+        .text-neon-gradient {
+            background: linear-gradient(135deg, #ffffff 0%, #a3e635 50%, #39ff14 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .text-glow {
+            text-shadow: 0 0 12px rgba(57, 255, 20, 0.5);
+        }
+
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #050507;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #1e2230;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #39ff14;
+        }
+    </style>
+</head>
+<body class="font-sans antialiased selection:bg-neon selection:text-black">
+
+    <!-- 3D KINETIC WEBGL CANVAS BACKGROUND -->
+    <canvas id="bg-canvas"></canvas>
+
+    <!-- TOAST NOTIFICATION CONTAINER -->
+    <div id="toast-container" class="fixed top-5 right-5 z-50 space-y-3 pointer-events-none"></div>
+
+    <!-- GLOBAL APP CONTAINER -->
+    <div class="relative z-10 flex flex-col min-h-screen">
+
+        <!-- HEADER NAVIGATION BAR -->
+        <header class="sticky top-0 z-40 glass-panel border-b border-slate-800/80 px-4 lg:px-8 py-3">
+            <div class="max-w-7xl mx-auto flex items-center justify-between gap-4">
+                
+                <!-- Brand Title -->
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-neon-dark via-emerald-500 to-neon shadow-neon-sm flex items-center justify-center text-black font-display font-black text-xl tracking-tighter">
+                        S
+                    </div>
+                    <div>
+                        <a href="index.html" class="font-display font-black text-xl md:text-2xl tracking-wider text-white flex items-center gap-1.5">
+                            SAM'S <span class="text-neon-gradient">GYM</span>
+                        </a>
+                        <p class="text-[10px] text-slate-400 font-medium tracking-widest uppercase -mt-1">3D Member Management</p>
+                    </div>
+                </div>
+
+                <!-- Sync Indicator -->
+                <div class="flex items-center gap-2 md:gap-3">
+                    <div id="sync-status-badge" class="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                        <span class="w-2 h-2 rounded-full bg-neon animate-pulse"></span>
+                        <span id="sync-status-text">Local Sync Active</span>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- MAIN VIEW WRAPPER -->
+        <main class="flex-1 max-w-7xl w-full mx-auto p-4 md:p-6 lg:p-8 space-y-6">
+
+            <!-- MEMBER LOOKUP VIEW (DEFAULT) -->
+            <section id="portal-view" class="space-y-6 max-w-md mx-auto py-4">
+                <div class="glass-panel rounded-3xl p-6 border-emerald-500/30 text-center space-y-4 shadow-2xl relative overflow-hidden">
+                    <div class="absolute top-0 right-0 w-32 h-32 bg-neon/10 rounded-full blur-2xl pointer-events-none"></div>
+
+                    <div class="w-16 h-16 rounded-2xl bg-slate-900 border border-neon/30 mx-auto flex items-center justify-center text-neon shadow-neon-glow">
+                        <i data-lucide="id-card" class="w-8 h-8"></i>
+                    </div>
+
+                    <div>
+                        <span class="text-[10px] font-bold tracking-widest text-neon uppercase px-3 py-1 bg-neon/10 rounded-full border border-neon/20">Member Status Lookup</span>
+                        <h2 class="font-display font-black text-2xl text-white mt-2">MEMBER DETAILS</h2>
+                        <p class="text-xs text-slate-400 mt-1">Check membership plan and validity dates</p>
+                    </div>
+
+                    <div id="portal-step-auth" class="space-y-4 pt-2 text-left">
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-300 mb-1">Member ID or Registered Phone *</label>
+                            <div class="relative">
+                                <i data-lucide="user" class="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                                <input type="text" id="portal-input-id" placeholder="e.g. SAM-1001 or 9876543210" class="w-full bg-slate-950 border border-slate-800 rounded-xl pl-10 pr-4 py-3 text-sm text-white focus:outline-none focus:border-neon transition font-mono uppercase">
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-300 mb-1">4-Digit Security PIN *</label>
+                            <div class="relative">
+                                <i data-lucide="key-round" class="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                                <input type="password" id="portal-input-pin" maxlength="4" placeholder="••••" class="w-full bg-slate-950 border border-slate-800 rounded-xl pl-10 pr-4 py-3 text-sm text-white focus:outline-none focus:border-neon transition font-mono text-lg tracking-widest">
+                            </div>
+                        </div>
+
+                        <button onclick="verifyPortalMember()" class="w-full py-3.5 rounded-xl bg-gradient-to-r from-neon-dark via-emerald-500 to-neon hover:from-emerald-500 hover:to-neon text-black font-display font-bold text-sm tracking-wide shadow-neon-glow transition transform active:scale-95 flex items-center justify-center gap-2">
+                            <span>VIEW DETAILS</span>
+                            <i data-lucide="arrow-right" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+
+                    <div id="portal-step-action" class="hidden space-y-5 text-left pt-2">
+                        <div class="bg-slate-950 border border-slate-800 rounded-2xl p-4 space-y-2">
+                            <div class="flex items-start justify-between">
+                                <div>
+                                    <h3 id="portal-member-name" class="font-bold text-white text-base">--</h3>
+                                    <p id="portal-member-code" class="text-xs text-slate-400 font-mono">--</p>
+                                </div>
+                                <span id="portal-member-status" class="text-[10px] font-bold px-2.5 py-1 rounded-full border">--</span>
+                            </div>
+                            
+                            <div class="grid grid-cols-2 gap-2 text-xs pt-2 border-t border-slate-900">
+                                <div>
+                                    <span class="text-slate-500 block">Plan:</span>
+                                    <span id="portal-member-plan" class="text-slate-200 font-medium">--</span>
+                                </div>
+                                <div>
+                                    <span class="text-slate-500 block">Validity:</span>
+                                    <span id="portal-member-expiry" class="text-slate-200 font-medium">--</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div id="portal-error-box" class="hidden bg-rose-500/10 border border-rose-500/30 p-3 rounded-xl text-xs text-rose-400 font-medium flex items-center gap-2">
+                            <i data-lucide="alert-triangle" class="w-4 h-4 shrink-0"></i>
+                            <span id="portal-error-msg">--</span>
+                        </div>
+
+                        <button onclick="resetPortalView()" class="w-full py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-white text-xs font-semibold transition">
+                            ← Search Another Member
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ADMIN COMMAND CENTER DASHBOARD -->
+            <section id="admin-view" class="hidden space-y-6">
+
+                <!-- ADMIN PASSWORD LOCK OVERLAY -->
+                <div id="admin-lock-overlay" class="glass-panel rounded-3xl p-8 text-center max-w-sm mx-auto space-y-6 my-12 border-neon/30">
+                    <div class="w-16 h-16 rounded-2xl bg-emerald-500/10 border border-neon/30 text-neon flex items-center justify-center mx-auto shadow-neon-glow">
+                        <i data-lucide="lock" class="w-8 h-8"></i>
+                    </div>
+                    <div>
+                        <h2 class="font-display font-black text-2xl text-white">ADMIN COMMAND LOCK</h2>
+                        <p class="text-xs text-slate-400 mt-1">Enter Owner Security Password (min. 6 characters)</p>
+                    </div>
+
+                    <div class="space-y-3">
+                        <input type="password" id="admin-pin-input" minlength="6" placeholder="••••••" class="w-full bg-slate-950 border border-slate-800 rounded-xl py-3 text-center text-2xl text-neon font-mono tracking-widest focus:outline-none focus:border-neon">
+                        <button onclick="unlockAdminDashboard()" class="w-full py-3 rounded-xl bg-neon hover:bg-neon-lime text-black font-display font-bold text-sm shadow-neon-sm transition">
+                            UNLOCK DASHBOARD
+                        </button>
+                    </div>
+                </div>
+
+                <!-- UNLOCKED ADMIN CONTENT CONTAINER -->
+                <div id="admin-content" class="hidden space-y-6">
+                    
+                    <!-- ADMIN TABS NAVIGATION BAR -->
+                    <div class="flex items-center gap-2 overflow-x-auto pb-2 text-xs border-b border-slate-800/80 scrollbar-none">
+                        <button onclick="switchAdminTab('telemetry')" id="tab-btn-telemetry" class="admin-tab-btn active px-4 py-2.5 rounded-xl font-bold transition flex items-center gap-2 whitespace-nowrap bg-neon text-black shadow-neon-sm">
+                            <i data-lucide="activity" class="w-4 h-4"></i>
+                            <span>Overview & KPIs</span>
+                        </button>
+                        <button onclick="switchAdminTab('members')" id="tab-btn-members" class="admin-tab-btn px-4 py-2.5 rounded-xl font-bold transition flex items-center gap-2 whitespace-nowrap bg-obsidian-card text-slate-300 hover:text-white border border-slate-800">
+                            <i data-lucide="users" class="w-4 h-4"></i>
+                            <span>Member Directory</span>
+                        </button>
+                        <button onclick="switchAdminTab('payments')" id="tab-btn-payments" class="admin-tab-btn px-4 py-2.5 rounded-xl font-bold transition flex items-center gap-2 whitespace-nowrap bg-obsidian-card text-slate-300 hover:text-white border border-slate-800">
+                            <i data-lucide="indian-rupee" class="w-4 h-4"></i>
+                            <span>Payments & Plans</span>
+                        </button>
+                        <button onclick="switchAdminTab('whatsapp')" id="tab-btn-whatsapp" class="admin-tab-btn px-4 py-2.5 rounded-xl font-bold transition flex items-center gap-2 whitespace-nowrap bg-obsidian-card text-slate-300 hover:text-white border border-slate-800">
+                            <i data-lucide="message-square" class="w-4 h-4"></i>
+                            <span>WhatsApp & Reports</span>
+                        </button>
+                        <button onclick="switchAdminTab('cloud')" id="tab-btn-cloud" class="admin-tab-btn px-4 py-2.5 rounded-xl font-bold transition flex items-center gap-2 whitespace-nowrap bg-obsidian-card text-slate-300 hover:text-white border border-slate-800">
+                            <i data-lucide="database" class="w-4 h-4"></i>
+                            <span>Cloud & Security</span>
+                        </button>
+                    </div>
+
+                    <!-- TAB 1: OVERVIEW & KPIS -->
+                    <div id="admin-tab-telemetry-content" class="tab-content space-y-6">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                            <div class="glass-card-interactive rounded-2xl p-4 md:p-5 flex flex-col justify-between border-neon/30">
+                                <div class="flex items-center justify-between text-slate-400">
+                                    <span class="text-xs font-bold uppercase tracking-wider text-neon">Total Members</span>
+                                    <div class="p-2 bg-neon/10 text-neon rounded-xl">
+                                        <i data-lucide="users" class="w-5 h-5"></i>
+                                    </div>
+                                </div>
+                                <div class="mt-4">
+                                    <span id="kpi-total-members" class="text-3xl md:text-4xl font-display font-black text-white text-glow">0</span>
+                                    <p class="text-[11px] text-slate-400 mt-1">Stored in Supabase</p>
+                                </div>
+                            </div>
+
+                            <div class="glass-card-interactive rounded-2xl p-4 md:p-5 flex flex-col justify-between">
+                                <div class="flex items-center justify-between text-slate-400">
+                                    <span class="text-xs font-bold uppercase tracking-wider">Active Members</span>
+                                    <div class="p-2 bg-emerald-500/10 text-emerald-400 rounded-xl">
+                                        <i data-lucide="user-check" class="w-5 h-5"></i>
+                                    </div>
+                                </div>
+                                <div class="mt-4">
+                                    <span id="kpi-active-members" class="text-3xl md:text-4xl font-display font-black text-emerald-400">0</span>
+                                    <p class="text-[11px] text-slate-400 mt-1">Valid membership dates</p>
+                                </div>
+                            </div>
+
+                            <div class="glass-card-interactive rounded-2xl p-4 md:p-5 flex flex-col justify-between">
+                                <div class="flex items-center justify-between text-slate-400">
+                                    <span class="text-xs font-bold uppercase tracking-wider">Revenue & Dues</span>
+                                    <div class="p-2 bg-teal-500/10 text-teal-400 rounded-xl">
+                                        <i data-lucide="wallet" class="w-5 h-5"></i>
+                                    </div>
+                                </div>
+                                <div class="mt-4">
+                                    <span id="kpi-total-revenue" class="text-2xl md:text-3xl font-display font-black text-emerald-400">₹0</span>
+                                    <p class="text-xs text-rose-400 font-semibold mt-0.5">Pending Dues: <span id="kpi-pending-dues">₹0</span></p>
+                                </div>
+                            </div>
+
+                            <div class="glass-card-interactive rounded-2xl p-4 md:p-5 flex flex-col justify-between">
+                                <div class="flex items-center justify-between text-slate-400">
+                                    <span class="text-xs font-bold uppercase tracking-wider">Expiring Soon</span>
+                                    <div class="p-2 bg-amber-500/10 text-amber-400 rounded-xl">
+                                        <i data-lucide="bell" class="w-5 h-5"></i>
+                                    </div>
+                                </div>
+                                <div class="mt-4">
+                                    <span id="kpi-expiring-soon" class="text-3xl md:text-4xl font-display font-black text-amber-400">0</span>
+                                    <p class="text-[11px] text-slate-400 mt-1">Members expiring ≤ 3 days</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="glass-panel rounded-3xl p-6 border-slate-800 flex flex-col md:flex-row items-center justify-between gap-4">
+                            <div class="space-y-1 text-center md:text-left">
+                                <h3 class="font-display font-bold text-lg text-white">Member Records & Dates Synced</h3>
+                                <p class="text-xs text-slate-400">Add, edit dates/plans, and manage member records directly in Supabase.</p>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <button onclick="openAddMemberModal()" class="px-4 py-2.5 rounded-xl bg-neon text-black font-bold text-xs shadow-neon-sm hover:bg-neon-lime transition">
+                                    + Add New Member
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- TAB 2: MEMBER DIRECTORY -->
+                    <div id="admin-tab-members-content" class="tab-content hidden space-y-4">
+                        <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+                            <div class="relative flex-1 sm:w-72">
+                                <i data-lucide="search" class="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                                <input type="text" id="member-search-input" oninput="renderMembersDirectory()" placeholder="Search member name, ID or phone..." class="w-full bg-slate-950 border border-slate-800 rounded-xl pl-10 pr-4 py-2 text-xs text-white focus:outline-none focus:border-neon">
+                            </div>
+
+                            <div class="flex items-center gap-1.5 overflow-x-auto text-xs">
+                                <button onclick="setMemberFilter('all')" id="mfilter-all" class="mfilter-btn bg-neon text-black px-3 py-1.5 rounded-xl font-bold">All</button>
+                                <button onclick="setMemberFilter('active')" id="mfilter-active" class="mfilter-btn bg-slate-800 text-slate-300 hover:bg-slate-700 px-3 py-1.5 rounded-xl font-medium">Active</button>
+                                <button onclick="setMemberFilter('expiring')" id="mfilter-expiring" class="mfilter-btn bg-slate-800 text-slate-300 hover:bg-slate-700 px-3 py-1.5 rounded-xl font-medium">Expiring ≤3d</button>
+                                <button onclick="setMemberFilter('expired')" id="mfilter-expired" class="mfilter-btn bg-slate-800 text-slate-300 hover:bg-slate-700 px-3 py-1.5 rounded-xl font-medium">Expired</button>
+                            </div>
+
+                            <button onclick="openAddMemberModal()" class="px-4 py-2 rounded-xl bg-neon hover:bg-neon-lime text-black font-bold text-xs shadow-neon-sm transition">
+                                + Add Member
+                            </button>
+                        </div>
+
+                        <div id="members-grid-container" class="space-y-3"></div>
+                    </div>
+
+                    <!-- TAB 3: PAYMENTS & MEMBERSHIP PLANS -->
+                    <div id="admin-tab-payments-content" class="tab-content hidden space-y-6">
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div class="glass-panel rounded-2xl p-4 space-y-1">
+                                <span class="text-xs text-slate-400 font-semibold">Total Revenue Collected</span>
+                                <h3 id="pay-total-revenue" class="text-2xl font-display font-black text-emerald-400">₹0</h3>
+                            </div>
+                            <div class="glass-panel rounded-2xl p-4 space-y-1">
+                                <span class="text-xs text-slate-400 font-semibold">Outstanding Pending Dues</span>
+                                <h3 id="pay-total-dues" class="text-2xl font-display font-black text-rose-400">₹0</h3>
+                            </div>
+                            <div class="glass-panel rounded-2xl p-4 space-y-1">
+                                <span class="text-xs text-slate-400 font-semibold">Active Subscription Plans</span>
+                                <h3 id="pay-active-plans-count" class="text-2xl font-display font-black text-white">4 Plans</h3>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                            <div class="glass-panel rounded-3xl p-5 space-y-4 border-slate-800">
+                                <h3 class="font-display font-bold text-base text-white">Membership Plans</h3>
+                                <div id="plans-list-container" class="space-y-3"></div>
+                            </div>
+
+                            <div class="lg:col-span-2 glass-panel rounded-3xl p-5 space-y-4 border-slate-800">
+                                <h3 class="font-display font-bold text-base text-white">Recent Payment Transactions</h3>
+                                <div class="overflow-x-auto">
+                                    <table class="w-full text-left text-xs">
+                                        <thead class="bg-slate-950 text-slate-400 font-semibold border-b border-slate-800">
+                                            <tr>
+                                                <th class="p-3">Member</th>
+                                                <th class="p-3">Amount Paid</th>
+                                                <th class="p-3">Pending Due</th>
+                                                <th class="p-3">Method</th>
+                                                <th class="p-3">Date</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="payments-table-body" class="divide-y divide-slate-800 text-slate-300"></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- TAB 4: WHATSAPP & DAILY HISAAB -->
+                    <div id="admin-tab-whatsapp-content" class="tab-content hidden space-y-6">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div class="glass-panel rounded-3xl p-6 space-y-4 border-emerald-500/30">
+                                <div class="flex items-center justify-between">
+                                    <div>
+                                        <h3 class="font-display font-bold text-lg text-white">WhatsApp Expiry Queue</h3>
+                                        <p class="text-xs text-slate-400">Free 1-tap wa.me reminder links for members expiring in ≤3 days.</p>
+                                    </div>
+                                    <span id="wa-queue-count" class="bg-neon/10 text-neon text-xs font-bold px-2.5 py-1 rounded-full border border-neon/20">0</span>
+                                </div>
+
+                                <div id="wa-reminder-queue-list" class="space-y-3 max-h-96 overflow-y-auto"></div>
+                            </div>
+
+                            <div class="glass-panel rounded-3xl p-6 space-y-4 border-slate-800">
+                                <div>
+                                    <h3 class="font-display font-bold text-lg text-white">Daily Hisaab / Summary</h3>
+                                    <p class="text-xs text-slate-400">Generate a concise report summarizing active members, revenue, and pending dues.</p>
+                                </div>
+
+                                <div id="hisaab-report-box" class="bg-slate-950 p-4 rounded-2xl border border-slate-800 font-mono text-xs text-slate-300 space-y-1"></div>
+
+                                <div class="flex flex-wrap items-center gap-2 pt-2">
+                                    <button onclick="copyHisaabText()" class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs border border-slate-700 transition flex items-center gap-1.5">
+                                        <i data-lucide="copy" class="w-4 h-4"></i>
+                                        <span>Copy Text Report</span>
+                                    </button>
+                                    <button onclick="sendHisaabToOwnerWA()" class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-md transition flex items-center gap-1.5">
+                                        <i data-lucide="message-square" class="w-4 h-4"></i>
+                                        <span>Send to Owner WhatsApp</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- TAB 5: CLOUD & SECURITY -->
+                    <div id="admin-tab-cloud-content" class="tab-content hidden space-y-6">
+                        <div class="glass-panel rounded-3xl p-6 space-y-4 border-neon/30">
+                            <div>
+                                <h3 class="font-display font-bold text-lg text-white flex items-center gap-2">
+                                    <i data-lucide="key-round" class="w-5 h-5 text-neon"></i>
+                                    Change Admin Password (Min. 6 Characters)
+                                </h3>
+                                <p class="text-xs text-slate-400 mt-1">Apna admin password yahan se directly badlein.</p>
+                            </div>
+
+                            <form onsubmit="changeAdminPassword(event)" class="grid grid-cols-1 md:grid-cols-3 gap-3 items-end">
+                                <div>
+                                    <label class="block text-xs font-semibold text-slate-300 mb-1">Current Password</label>
+                                    <input type="password" id="curr-admin-pass" required minlength="6" placeholder="Current password" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-white font-mono focus:outline-none focus:border-neon">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-semibold text-slate-300 mb-1">New Password (min. 6 chars)</label>
+                                    <input type="password" id="new-admin-pass" required minlength="6" placeholder="New password" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-neon font-mono focus:outline-none focus:border-neon">
+                                </div>
+                                <button type="submit" class="px-5 py-2.5 rounded-xl bg-neon hover:bg-neon-lime text-black font-bold text-xs shadow-neon-sm transition">
+                                    Update Admin Password
+                                </button>
+                            </form>
+                        </div>
+
+                        <div class="glass-panel rounded-3xl p-6 space-y-6 border-slate-800">
+                            <div>
+                                <h3 class="font-display font-bold text-xl text-white flex items-center gap-2">
+                                    <i data-lucide="database" class="w-5 h-5 text-neon"></i>
+                                    Supabase Cloud Database Integration
+                                </h3>
+                                <p class="text-xs text-slate-400 mt-1">Connect your Supabase project to store and sync member details and dates across refreshes/devices.</p>
+                            </div>
+
+                            <form id="cloud-config-form" onsubmit="saveCloudConfig(event)" class="space-y-4">
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <label class="block text-xs font-semibold text-slate-300 mb-1">Supabase Project URL</label>
+                                        <input type="text" id="cloud-supa-url" placeholder="https://xyz.supabase.co" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-white font-mono focus:outline-none focus:border-neon">
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs font-semibold text-slate-300 mb-1">Supabase Anon / Publishable Key</label>
+                                        <input type="text" id="cloud-supa-key" placeholder="eyJhbGci... or sb_publishable_..." class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-white font-mono focus:outline-none focus:border-neon">
+                                    </div>
+                                </div>
+
+                                <div class="flex flex-wrap items-center gap-3">
+                                    <button type="submit" class="px-5 py-2.5 rounded-xl bg-neon hover:bg-neon-lime text-black font-bold text-xs shadow-neon-sm transition">
+                                        Save & Connect Supabase Cloud
+                                    </button>
+                                    <button type="button" onclick="copyFullSQLSchema()" class="px-5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs border border-slate-700 transition flex items-center gap-1.5">
+                                        <i data-lucide="copy" class="w-4 h-4"></i>
+                                        <span>Copy SQL Schema</span>
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- SUBTLE CORNER ADMIN TRIGGER ICON -->
+    <button onclick="openHiddenAdminLogin()" title="Owner Access" class="fixed bottom-3 right-3 z-40 w-7 h-7 rounded-full bg-slate-900/60 hover:bg-slate-800 border border-slate-800/70 text-slate-500 hover:text-neon flex items-center justify-center opacity-35 hover:opacity-100 transition">
+        <i data-lucide="key-round" class="w-3.5 h-3.5"></i>
+    </button>
+
+    <!-- MODAL: ADD / EDIT MEMBER -->
+    <div id="modal-member" class="fixed inset-0 z-50 hidden bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4">
+        <div class="bg-obsidian-card border border-slate-800 rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+            <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+                <h3 id="modal-member-title" class="font-display font-bold text-lg text-white">Add New Member</h3>
+                <button onclick="closeModal('modal-member')" class="text-slate-400 hover:text-white">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <form id="form-member" onsubmit="handleSaveMember(event)" class="space-y-3">
+                <input type="hidden" id="mem-edit-id">
+                
+                <div>
+                    <label class="block text-xs font-semibold text-slate-300 mb-1">Full Name *</label>
+                    <input type="text" id="mem-name" required placeholder="e.g. Rohan Verma" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-neon">
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-300 mb-1">Phone Number *</label>
+                        <input type="tel" id="mem-phone" required pattern="[0-9]{10}" placeholder="9876543210" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-neon">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-300 mb-1">4-Digit Security PIN *</label>
+                        <input type="text" id="mem-pin" required maxlength="4" pattern="[0-9]{4}" placeholder="1234" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-neon font-mono focus:outline-none focus:border-neon">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-300 mb-1">Membership Plan *</label>
+                        <select id="mem-plan" onchange="calculateMemExpiryPreview()" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-neon">
+                            <option value="Monthly (1M)">Monthly (1M)</option>
+                            <option value="Quarterly (3M)">Quarterly (3M)</option>
+                            <option value="Half-Yearly (6M)">Half-Yearly (6M)</option>
+                            <option value="Yearly (12M)">Yearly (12M)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-300 mb-1">Start Date *</label>
+                        <input type="date" id="mem-start-date" onchange="calculateMemExpiryPreview()" required class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-neon">
+                    </div>
+                </div>
+
+                <div class="bg-slate-950 p-3 rounded-xl border border-slate-800 flex items-center justify-between text-xs">
+                    <span class="text-slate-400">Calculated Expiry:</span>
+                    <span id="mem-expiry-preview" class="font-bold text-neon">--</span>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-300 mb-1">Amount Paid (₹)</label>
+                        <input type="number" id="mem-amount-paid" min="0" placeholder="1500" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-neon">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-300 mb-1">Pending Due (₹)</label>
+                        <input type="number" id="mem-due-amount" min="0" value="0" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-neon">
+                    </div>
+                </div>
+
+                <div class="pt-3 flex items-center justify-end gap-2">
+                    <button type="button" onclick="closeModal('modal-member')" class="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 text-xs font-medium">Cancel</button>
+                    <button type="submit" class="px-5 py-2 rounded-xl bg-neon hover:bg-neon-lime text-black text-xs font-bold shadow-neon-sm transition">Save Member</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        const APP_CONFIG_KEY = 'sams_gym_members_config_v1';
+        const APP_MEMBERS_KEY = 'sams_gym_members_data_v1';
+        const APP_PAYMENTS_KEY = 'sams_gym_payments_data_v1';
+
+        let appConfig = {
+            gymName: "SAM'S GYM",
+            adminPin: 'SamGym99',
+            supabaseUrl: '',
+            supabaseKey: ''
+        };
+
+        let members = [];
+        let payments = [];
+        let membershipPlans = [
+            { id: 'p1', name: 'Monthly (1M)', months: 1, price: 1500, desc: 'Regular Monthly Gym Access' },
+            { id: 'p2', name: 'Quarterly (3M)', months: 3, price: 4000, desc: 'Save ₹500 on 3 Months' },
+            { id: 'p3', name: 'Half-Yearly (6M)', months: 6, price: 7500, desc: 'Pro Member 6 Months' },
+            { id: 'p4', name: 'Yearly (12M)', months: 12, price: 13500, desc: 'Full Year All-Access VIP' }
+        ];
+
+        let currentMemberFilter = 'all';
+        let isAdminUnlocked = false;
+        let supabaseClient = null;
+        let threeScene, threeCamera, threeRenderer, torusKnot, particleSystem;
+
+        window.addEventListener('DOMContentLoaded', async () => {
+            initThreeJSBackground();
+            loadAppConfig();
+            loadDataFromStorage();
+            switchAppView('portal');
+            renderApp();
+            lucide.createIcons();
+
+            if (appConfig.supabaseUrl && appConfig.supabaseKey) {
+                await initSupabaseAndSync(true);
+            }
+        });
+
+        function initThreeJSBackground() {
+            const canvas = document.getElementById('bg-canvas');
+            threeScene = new THREE.Scene();
+            threeCamera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+            threeCamera.position.z = 30;
+
+            threeRenderer = new THREE.WebGLRenderer({ canvas: canvas, alpha: true, antialias: true });
+            threeRenderer.setSize(window.innerWidth, window.innerHeight);
+            threeRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+            const geometry = new THREE.TorusKnotGeometry(8, 2.2, 120, 16);
+            const material = new THREE.MeshBasicMaterial({
+                color: 0x39ff14,
+                wireframe: true,
+                transparent: true,
+                opacity: 0.15
+            });
+            torusKnot = new THREE.Mesh(geometry, material);
+            threeScene.add(torusKnot);
+
+            const particleCount = 400;
+            const particleGeo = new THREE.BufferGeometry();
+            const positions = new Float32Array(particleCount * 3);
+            for (let i = 0; i < particleCount * 3; i += 3) {
+                positions[i] = (Math.random() - 0.5) * 100;
+                positions[i + 1] = (Math.random() - 0.5) * 100;
+                positions[i + 2] = (Math.random() - 0.5) * 100;
+            }
+            particleGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+
+            const particleMat = new THREE.PointsMaterial({
+                color: 0xa3e635,
+                size: 0.8,
+                transparent: true,
+                opacity: 0.4
+            });
+            particleSystem = new THREE.Points(particleGeo, particleMat);
+            threeScene.add(particleSystem);
+
+            let mouseX = 0, mouseY = 0;
+            window.addEventListener('mousemove', (e) => {
+                mouseX = (e.clientX / window.innerWidth - 0.5) * 0.5;
+                mouseY = (e.clientY / window.innerHeight - 0.5) * 0.5;
+            });
+
+            window.addEventListener('resize', () => {
+                threeCamera.aspect = window.innerWidth / window.innerHeight;
+                threeCamera.updateProjectionMatrix();
+                threeRenderer.setSize(window.innerWidth, window.innerHeight);
+            });
+
+            function animate() {
+                requestAnimationFrame(animate);
+                torusKnot.rotation.x += 0.004;
+                torusKnot.rotation.y += 0.006;
+                particleSystem.rotation.y -= 0.001;
+                torusKnot.rotation.x += (mouseY - torusKnot.rotation.x) * 0.05;
+                torusKnot.rotation.y += (mouseX - torusKnot.rotation.y) * 0.05;
+                threeRenderer.render(threeScene, threeCamera);
+            }
+            animate();
+        }
+
+        function loadAppConfig() {
+            const saved = localStorage.getItem(APP_CONFIG_KEY);
+            if (saved) {
+                try {
+                    const parsed = JSON.parse(saved);
+                    appConfig = {
+                        ...appConfig,
+                        ...parsed,
+                        adminPin: (parsed.adminPin && String(parsed.adminPin).length >= 6) ? parsed.adminPin : 'SamGym99'
+                    };
+                } catch (e) {}
+            }
+            document.getElementById('cloud-supa-url').value = appConfig.supabaseUrl || '';
+            document.getElementById('cloud-supa-key').value = appConfig.supabaseKey || '';
+        }
+
+        function saveAppConfig() {
+            localStorage.setItem(APP_CONFIG_KEY, JSON.stringify(appConfig));
+        }
+
+        function loadDataFromStorage() {
+            const todayStr = getTodayISO();
+            const storedMem = localStorage.getItem(APP_MEMBERS_KEY);
+            if (storedMem) {
+                members = JSON.parse(storedMem);
+            } else {
+                members = [
+                    { id: 'm1', code: 'SAM-1001', name: 'Rohan Verma', phone: '9876543210', pin: '1234', plan: 'Monthly (1M)', start_date: offsetDaysISO(todayStr, -25), expiry_date: offsetDaysISO(todayStr, 5), status: 'ACTIVE' },
+                    { id: 'm2', code: 'SAM-1002', name: 'Ananya Sharma', phone: '9812345678', pin: '2222', plan: 'Quarterly (3M)', start_date: offsetDaysISO(todayStr, -60), expiry_date: offsetDaysISO(todayStr, 30), status: 'ACTIVE' }
+                ];
+                saveMembersToStorage();
+            }
+
+            const storedPay = localStorage.getItem(APP_PAYMENTS_KEY);
+            if (storedPay) {
+                payments = JSON.parse(storedPay);
+            } else {
+                payments = [
+                    { id: 'pay_1', member_name: 'Rohan Verma', amount: 1500, due: 0, method: 'UPI', date: todayStr }
+                ];
+                savePaymentsToStorage();
+            }
+        }
+
+        function saveMembersToStorage() { localStorage.setItem(APP_MEMBERS_KEY, JSON.stringify(members)); }
+        function savePaymentsToStorage() { localStorage.setItem(APP_PAYMENTS_KEY, JSON.stringify(payments)); }
+
+        async function initSupabaseAndSync(silent = false) {
+            if (!appConfig.supabaseUrl || !appConfig.supabaseKey || !window.supabase) return;
+            try {
+                supabaseClient = window.supabase.createClient(appConfig.supabaseUrl, appConfig.supabaseKey);
+                await fetchAllFromSupabase();
+                document.getElementById('sync-status-text').textContent = "Supabase Live Sync";
+                if (!silent) showToast("Supabase connected & member details synced!");
+            } catch (err) {
+                if (!silent) showToast("Supabase connection check failed.");
+            }
+        }
+
+        async function fetchAllFromSupabase() {
+            if (!supabaseClient) return;
+            const [mRes, pRes] = await Promise.all([
+                supabaseClient.from('members').select('*'),
+                supabaseClient.from('payments').select('*').order('date', { ascending: false })
+            ]);
+
+            if (!mRes.error && mRes.data && mRes.data.length > 0) {
+                members = mRes.data;
+                saveMembersToStorage();
+            } else if (!mRes.error && mRes.data && mRes.data.length === 0 && members.length > 0) {
+                await supabaseClient.from('members').upsert(members);
+            }
+
+            if (!pRes.error && pRes.data) {
+                payments = pRes.data;
+                savePaymentsToStorage();
+            }
+            renderApp();
+        }
+
+        async function pushMemberToSupabase(record) {
+            if (!supabaseClient) return;
+            await supabaseClient.from('members').upsert(record);
+        }
+
+        async function deleteMemberFromSupabase(id) {
+            if (!supabaseClient) return;
+            await supabaseClient.from('members').delete().eq('id', id);
+        }
+
+        async function pushPaymentToSupabase(record) {
+            if (!supabaseClient) return;
+            await supabaseClient.from('payments').upsert(record);
+        }
+
+        function notifyDataChanged() {
+            saveMembersToStorage();
+            savePaymentsToStorage();
+            renderApp();
+        }
+
+        function switchAppView(view) {
+            const portalView = document.getElementById('portal-view');
+            const adminView = document.getElementById('admin-view');
+            if (view === 'admin') {
+                adminView.classList.remove('hidden');
+                portalView.classList.add('hidden');
+            } else {
+                portalView.classList.remove('hidden');
+                adminView.classList.add('hidden');
+            }
+        }
+
+        function openHiddenAdminLogin() {
+            switchAppView('admin');
+            if (!isAdminUnlocked) {
+                document.getElementById('admin-lock-overlay').classList.remove('hidden');
+                document.getElementById('admin-content').classList.add('hidden');
+                document.getElementById('admin-pin-input').focus();
+            }
+        }
+
+        function switchAdminTab(tabName) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+            document.querySelectorAll('.admin-tab-btn').forEach(btn => {
+                btn.className = "admin-tab-btn px-4 py-2.5 rounded-xl font-bold transition flex items-center gap-2 whitespace-nowrap bg-obsidian-card text-slate-300 hover:text-white border border-slate-800";
+            });
+
+            document.getElementById(`admin-tab-${tabName}-content`).classList.remove('hidden');
+            const activeBtn = document.getElementById(`tab-btn-${tabName}`);
+            if (activeBtn) {
+                activeBtn.className = "admin-tab-btn active px-4 py-2.5 rounded-xl font-bold transition flex items-center gap-2 whitespace-nowrap bg-neon text-black shadow-neon-sm";
+            }
+        }
+
+        function unlockAdminDashboard() {
+            const inputPin = document.getElementById('admin-pin-input').value.trim();
+            if (inputPin.length < 6) {
+                showToast("Password must be at least 6 characters!");
+                return;
+            }
+            if (inputPin === appConfig.adminPin) {
+                isAdminUnlocked = true;
+                document.getElementById('admin-lock-overlay').classList.add('hidden');
+                document.getElementById('admin-content').classList.remove('hidden');
+                document.getElementById('admin-pin-input').value = '';
+                showToast("Welcome back, Gym Owner!");
+                renderApp();
+            } else {
+                showToast("Incorrect Owner Security Password!");
+            }
+        }
+
+        function changeAdminPassword(e) {
+            e.preventDefault();
+            const currPass = document.getElementById('curr-admin-pass').value.trim();
+            const newPass = document.getElementById('new-admin-pass').value.trim();
+
+            if (currPass !== appConfig.adminPin) {
+                showToast("Current password galat hai!");
+                return;
+            }
+            if (newPass.length < 6) {
+                showToast("Naya password kam se kam 6 characters ka hona chahiye!");
+                return;
+            }
+
+            appConfig.adminPin = newPass;
+            saveAppConfig();
+            document.getElementById('curr-admin-pass').value = '';
+            document.getElementById('new-admin-pass').value = '';
+            showToast("Admin password update ho gaya!");
+        }
+
+        async function verifyPortalMember() {
+            if (supabaseClient) await fetchAllFromSupabase();
+
+            const inputId = document.getElementById('portal-input-id').value.trim().toUpperCase();
+            const inputPin = document.getElementById('portal-input-pin').value.trim();
+
+            if (!inputId || !inputPin) {
+                showToast("Please enter Member ID/Phone and PIN.");
+                return;
+            }
+
+            const member = members.find(m => m.code.toUpperCase() === inputId || m.phone.endsWith(inputId));
+            if (!member) {
+                showToast("Member nahi mila!");
+                return;
+            }
+            if (member.pin !== inputPin) {
+                showToast("Invalid 4-Digit Security PIN!");
+                return;
+            }
+
+            document.getElementById('portal-step-auth').classList.add('hidden');
+            document.getElementById('portal-step-action').classList.remove('hidden');
+            document.getElementById('portal-member-name').textContent = member.name;
+            document.getElementById('portal-member-code').textContent = member.code;
+            document.getElementById('portal-member-plan').textContent = member.plan;
+            document.getElementById('portal-member-expiry').textContent = formatDateDisplay(member.expiry_date);
+
+            const statusBadge = document.getElementById('portal-member-status');
+            const todayStr = getTodayISO();
+            const isExpired = member.expiry_date < todayStr || member.status === 'EXPIRED';
+
+            if (isExpired) {
+                statusBadge.className = "text-[10px] font-bold px-2.5 py-1 rounded-full border bg-rose-500/10 text-rose-400 border-rose-500/30";
+                statusBadge.textContent = "EXPIRED";
+                document.getElementById('portal-error-box').classList.remove('hidden');
+                document.getElementById('portal-error-msg').textContent = "Membership is expired.";
+            } else {
+                statusBadge.className = "text-[10px] font-bold px-2.5 py-1 rounded-full border bg-emerald-500/10 text-emerald-400 border-emerald-500/30";
+                statusBadge.textContent = "ACTIVE";
+                document.getElementById('portal-error-box').classList.add('hidden');
+            }
+        }
+
+        function resetPortalView() {
+            document.getElementById('portal-input-id').value = '';
+            document.getElementById('portal-input-pin').value = '';
+            document.getElementById('portal-step-auth').classList.remove('hidden');
+            document.getElementById('portal-step-action').classList.add('hidden');
+            document.getElementById('portal-error-box').classList.add('hidden');
+        }
+
+        function renderApp() {
+            const todayStr = getTodayISO();
+            const activeCount = members.filter(m => getDaysDiff(m.expiry_date, todayStr) >= 0 && m.status !== 'EXPIRED').length;
+            const totalRev = payments.reduce((acc, p) => acc + Number(p.amount || 0), 0);
+            const totalDues = payments.reduce((acc, p) => acc + Number(p.due || 0), 0);
+            const expiringSoonCount = members.filter(m => {
+                const diff = getDaysDiff(m.expiry_date, todayStr);
+                return diff >= 0 && diff <= 3;
+            }).length;
+
+            document.getElementById('kpi-total-members').textContent = members.length;
+            document.getElementById('kpi-active-members').textContent = activeCount;
+            document.getElementById('kpi-total-revenue').textContent = `₹${totalRev.toLocaleString('en-IN')}`;
+            document.getElementById('kpi-pending-dues').textContent = `₹${totalDues.toLocaleString('en-IN')}`;
+            document.getElementById('kpi-expiring-soon').textContent = expiringSoonCount;
+
+            renderMembersDirectory();
+            renderPaymentsTab();
+            renderWhatsAppQueue();
+            renderHisaabReport();
+            lucide.createIcons();
+        }
+
+        function renderMembersDirectory() {
+            const container = document.getElementById('members-grid-container');
+            const searchVal = document.getElementById('member-search-input').value.toLowerCase().trim();
+            const todayStr = getTodayISO();
+
+            const filtered = members.filter(m => {
+                const matchSearch = m.name.toLowerCase().includes(searchVal) || m.code.toLowerCase().includes(searchVal) || m.phone.includes(searchVal);
+                if (!matchSearch) return false;
+                const diff = getDaysDiff(m.expiry_date, todayStr);
+                if (currentMemberFilter === 'active') return diff >= 0 && m.status !== 'EXPIRED';
+                if (currentMemberFilter === 'expiring') return diff >= 0 && diff <= 3;
+                if (currentMemberFilter === 'expired') return diff < 0 || m.status === 'EXPIRED';
+                return true;
+            });
+
+            if (filtered.length === 0) {
+                container.innerHTML = `<div class="p-8 text-center text-slate-500 text-xs">No members found.</div>`;
+                return;
+            }
+
+            container.innerHTML = filtered.map(m => {
+                const diff = getDaysDiff(m.expiry_date, todayStr);
+                let badge = '';
+                if (diff < 0 || m.status === 'EXPIRED') {
+                    badge = `<span class="bg-rose-500/10 text-rose-400 border border-rose-500/30 text-[10px] font-bold px-2 py-0.5 rounded-full">EXPIRED</span>`;
+                } else if (diff <= 3) {
+                    badge = `<span class="bg-amber-500/10 text-amber-400 border border-amber-500/30 text-[10px] font-bold px-2 py-0.5 rounded-full">Ends in ${diff}d</span>`;
+                } else {
+                    badge = `<span class="bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 text-[10px] font-bold px-2 py-0.5 rounded-full">ACTIVE</span>`;
+                }
+
+                return `
+                    <div class="glass-panel rounded-2xl p-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border-slate-800 hover:border-slate-700 transition">
+                        <div class="space-y-1">
+                            <div class="flex items-center gap-2">
+                                <h4 class="font-bold text-white text-sm">${m.name}</h4>
+                                <span class="font-mono text-xs text-neon font-bold px-2 py-0.5 rounded-md bg-slate-900 border border-slate-800">${m.code}</span>
+                                ${badge}
+                            </div>
+                            <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-400">
+                                <span>📞 +91 ${m.phone}</span>
+                                <span>PIN: <strong class="text-neon font-mono">${m.pin}</strong></span>
+                                <span>Plan: <strong class="text-slate-200">${m.plan}</strong></span>
+                                <span>Start: <strong class="text-slate-300">${formatDateDisplay(m.start_date)}</strong></span>
+                                <span>Expires: <strong class="text-emerald-400">${formatDateDisplay(m.expiry_date)}</strong></span>
+                            </div>
+                        </div>
+
+                        <div class="flex items-center gap-2 w-full md:w-auto justify-end">
+                            <button onclick="openEditMemberModal('${m.id}')" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-semibold transition flex items-center gap-1">
+                                <i data-lucide="edit-3" class="w-3.5 h-3.5"></i>
+                                <span>Edit Details & Date</span>
+                            </button>
+                            <button onclick="deleteMember('${m.id}')" class="p-2 bg-slate-800 hover:bg-rose-950 text-rose-400 rounded-xl transition">
+                                <i data-lucide="trash-2" class="w-4 h-4"></i>
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function setMemberFilter(filter) {
+            currentMemberFilter = filter;
+            document.querySelectorAll('.mfilter-btn').forEach(btn => {
+                btn.className = "mfilter-btn bg-slate-800 text-slate-300 hover:bg-slate-700 px-3 py-1.5 rounded-xl font-medium";
+            });
+            document.getElementById(`mfilter-${filter}`).className = "mfilter-btn bg-neon text-black px-3 py-1.5 rounded-xl font-bold";
+            renderMembersDirectory();
+        }
+
+        function openAddMemberModal() {
+            document.getElementById('mem-edit-id').value = '';
+            document.getElementById('modal-member-title').textContent = "Add New Member";
+            document.getElementById('mem-name').value = '';
+            document.getElementById('mem-phone').value = '';
+            document.getElementById('mem-pin').value = Math.floor(1000 + Math.random() * 9000);
+            document.getElementById('mem-start-date').value = getTodayISO();
+            calculateMemExpiryPreview();
+            document.getElementById('modal-member').classList.remove('hidden');
+        }
+
+        function openEditMemberModal(memId) {
+            const m = members.find(item => item.id === memId);
+            if (!m) return;
+            document.getElementById('mem-edit-id').value = m.id;
+            document.getElementById('modal-member-title').textContent = "Edit Member Details & Dates";
+            document.getElementById('mem-name').value = m.name;
+            document.getElementById('mem-phone').value = m.phone;
+            document.getElementById('mem-pin').value = m.pin;
+            document.getElementById('mem-plan').value = m.plan;
+            document.getElementById('mem-start-date').value = m.start_date;
+            document.getElementById('mem-expiry-preview').textContent = formatDateDisplay(m.expiry_date);
+            document.getElementById('modal-member').classList.remove('hidden');
+        }
+
+        function calculateMemExpiryPreview() {
+            const startDate = document.getElementById('mem-start-date').value || getTodayISO();
+            const planVal = document.getElementById('mem-plan').value;
+            let months = 1;
+            if (planVal.includes('3M')) months = 3;
+            else if (planVal.includes('6M')) months = 6;
+            else if (planVal.includes('12M')) months = 12;
+            const exp = addMonthsSafe(startDate, months);
+            document.getElementById('mem-expiry-preview').textContent = formatDateDisplay(exp);
+        }
+
+        async function handleSaveMember(e) {
+            e.preventDefault();
+            const editId = document.getElementById('mem-edit-id').value;
+            const name = document.getElementById('mem-name').value.trim();
+            const phone = document.getElementById('mem-phone').value.trim();
+            const pin = document.getElementById('mem-pin').value.trim();
+            const plan = document.getElementById('mem-plan').value;
+            const startDate = document.getElementById('mem-start-date').value;
+
+            let months = 1;
+            if (plan.includes('3M')) months = 3;
+            else if (plan.includes('6M')) months = 6;
+            else if (plan.includes('12M')) months = 12;
+            const expiryDate = addMonthsSafe(startDate, months);
+
+            if (editId) {
+                const m = members.find(item => item.id === editId);
+                if (m) {
+                    m.name = name;
+                    m.phone = phone;
+                    m.pin = pin;
+                    m.plan = plan;
+                    m.start_date = startDate;
+                    m.expiry_date = expiryDate;
+                    await pushMemberToSupabase(m);
+                }
+            } else {
+                const newMember = {
+                    id: 'm_' + Date.now(),
+                    code: `SAM-${members.length + 1001}`,
+                    name,
+                    phone,
+                    pin,
+                    plan,
+                    start_date: startDate,
+                    expiry_date: expiryDate,
+                    status: 'ACTIVE'
+                };
+                members.unshift(newMember);
+                await pushMemberToSupabase(newMember);
+
+                const amountPaid = Number(document.getElementById('mem-amount-paid').value || 0);
+                const dueAmount = Number(document.getElementById('mem-due-amount').value || 0);
+                if (amountPaid > 0 || dueAmount > 0) {
+                    const newPay = {
+                        id: 'pay_' + Date.now(),
+                        member_name: name,
+                        amount: amountPaid,
+                        due: dueAmount,
+                        method: 'CASH',
+                        date: getTodayISO()
+                    };
+                    payments.unshift(newPay);
+                    await pushPaymentToSupabase(newPay);
+                }
+            }
+
+            notifyDataChanged();
+            closeModal('modal-member');
+            showToast(`Saved member ${name}`);
+        }
+
+        async function deleteMember(memId) {
+            const m = members.find(item => item.id === memId);
+            if (!m) return;
+            if (confirm(`Delete member ${m.name} permanently?`)) {
+                members = members.filter(item => item.id !== memId);
+                notifyDataChanged();
+                await deleteMemberFromSupabase(memId);
+                showToast(`Deleted ${m.name}`);
+            }
+        }
+
+        function renderPaymentsTab() {
+            const plansContainer = document.getElementById('plans-list-container');
+            plansContainer.innerHTML = membershipPlans.map(p => `
+                <div class="bg-slate-950 p-3.5 rounded-2xl border border-slate-800 flex items-center justify-between">
+                    <div>
+                        <h4 class="font-bold text-white text-xs">${p.name}</h4>
+                        <p class="text-[10px] text-slate-400">${p.desc}</p>
+                    </div>
+                    <span class="font-display font-black text-sm text-neon">₹${p.price.toLocaleString('en-IN')}</span>
+                </div>
+            `).join('');
+
+            const tbody = document.getElementById('payments-table-body');
+            tbody.innerHTML = payments.map(p => `
+                <tr class="hover:bg-slate-900/50 transition">
+                    <td class="p-3 font-semibold text-white">${p.member_name}</td>
+                    <td class="p-3 font-mono text-emerald-400 font-bold">₹${Number(p.amount).toLocaleString('en-IN')}</td>
+                    <td class="p-3 font-mono text-rose-400">${Number(p.due) > 0 ? '₹' + p.due : '₹0'}</td>
+                    <td class="p-3 text-slate-300"><span class="bg-slate-900 px-2 py-0.5 rounded border border-slate-800 font-mono text-[10px]">${p.method}</span></td>
+                    <td class="p-3 text-slate-400">${formatDateDisplay(p.date)}</td>
+                </tr>
+            `).join('');
+        }
+
+        function renderWhatsAppQueue() {
+            const todayStr = getTodayISO();
+            const queue = members.filter(m => getDaysDiff(m.expiry_date, todayStr) <= 3);
+            document.getElementById('wa-queue-count').textContent = queue.length;
+
+            const container = document.getElementById('wa-reminder-queue-list');
+            if (queue.length === 0) {
+                container.innerHTML = `<p class="text-xs text-slate-500 py-4 text-center">All member memberships are active beyond 3 days!</p>`;
+                return;
+            }
+
+            container.innerHTML = queue.map(m => {
+                const diff = getDaysDiff(m.expiry_date, todayStr);
+                const msg = `Namaste ${m.name} ji! 🙏\n\n${appConfig.gymName} ki taraf se reminder: Aapki gym membership ${formatDateDisplay(m.expiry_date)} ko expire ho rahi hai (${diff <= 0 ? 'EXPIRED' : diff + ' days left'}).\n\nKripya samay par renewal karwa kar training continue rakhein! 💪`;
+                const waUrl = `https://wa.me/91${m.phone}?text=${encodeURIComponent(msg)}`;
+                return `
+                    <div class="bg-slate-950 p-3 rounded-2xl border border-slate-800 flex items-center justify-between">
+                        <div>
+                            <h4 class="font-bold text-white text-xs">${m.name} (+91 ${m.phone})</h4>
+                            <p class="text-[11px] text-amber-400 font-medium">Expires: ${formatDateDisplay(m.expiry_date)} (${diff <= 0 ? 'EXPIRED' : diff + 'd left'})</p>
+                        </div>
+                        <a href="${waUrl}" target="_blank" class="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-md transition flex items-center gap-1">
+                            <i data-lucide="message-square" class="w-3.5 h-3.5"></i>
+                            <span>Send</span>
+                        </a>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function renderHisaabReport() {
+            const todayStr = getTodayISO();
+            const activeCount = members.filter(m => getDaysDiff(m.expiry_date, todayStr) >= 0).length;
+            const totalRev = payments.reduce((acc, p) => acc + Number(p.amount || 0), 0);
+            const totalDues = payments.reduce((acc, p) => acc + Number(p.due || 0), 0);
+
+            document.getElementById('hisaab-report-box').innerHTML = `
+                <p class="font-bold text-neon">📊 MEMBER & HISAAB REPORT - ${appConfig.gymName}</p>
+                <p class="text-slate-400">Date: ${formatDateDisplay(todayStr)}</p>
+                <p class="border-b border-slate-800 my-1"></p>
+                <p>• Total Members: <strong class="text-white">${members.length}</strong></p>
+                <p>• Active Members: <strong class="text-emerald-400">${activeCount}</strong></p>
+                <p>• Total Revenue Collected: <strong class="text-emerald-400">₹${totalRev.toLocaleString('en-IN')}</strong></p>
+                <p>• Total Pending Dues: <strong class="text-rose-400">₹${totalDues.toLocaleString('en-IN')}</strong></p>
+            `;
+        }
+
+        function copyHisaabText() {
+            const todayStr = getTodayISO();
+            const activeCount = members.filter(m => getDaysDiff(m.expiry_date, todayStr) >= 0).length;
+            const totalRev = payments.reduce((acc, p) => acc + Number(p.amount || 0), 0);
+            const totalDues = payments.reduce((acc, p) => acc + Number(p.due || 0), 0);
+            const text = `📊 *MEMBER & HISAAB REPORT - ${appConfig.gymName}*\n📅 Date: ${formatDateDisplay(todayStr)}\n\n• Total Members: ${members.length}\n• Active Members: ${activeCount}\n• Revenue Collected: ₹${totalRev.toLocaleString('en-IN')}\n• Pending Dues: ₹${totalDues.toLocaleString('en-IN')}`;
+            copyToClipboard(text);
+            showToast("Copied Report!");
+        }
+
+        function sendHisaabToOwnerWA() {
+            const todayStr = getTodayISO();
+            const activeCount = members.filter(m => getDaysDiff(m.expiry_date, todayStr) >= 0).length;
+            const totalRev = payments.reduce((acc, p) => acc + Number(p.amount || 0), 0);
+            const totalDues = payments.reduce((acc, p) => acc + Number(p.due || 0), 0);
+            const text = `📊 *MEMBER & HISAAB REPORT - ${appConfig.gymName}*\n📅 Date: ${formatDateDisplay(todayStr)}\n\n• Total Members: ${members.length}\n• Active Members: ${activeCount}\n• Revenue Collected: ₹${totalRev.toLocaleString('en-IN')}\n• Pending Dues: ₹${totalDues.toLocaleString('en-IN')}`;
+            window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
+        }
+
+        async function saveCloudConfig(e) {
+            e.preventDefault();
+            appConfig.supabaseUrl = document.getElementById('cloud-supa-url').value.trim();
+            appConfig.supabaseKey = document.getElementById('cloud-supa-key').value.trim();
+            saveAppConfig();
+            await initSupabaseAndSync(false);
+        }
+
+        function copyFullSQLSchema() {
+            const sql = `create table if not exists public.members (
+  id text primary key,
+  code text unique not null,
+  name text not null,
+  phone text not null,
+  pin text not null,
+  plan text not null,
+  start_date date not null,
+  expiry_date date not null,
+  status text not null default 'ACTIVE'
+);
+
+create table if not exists public.payments (
+  id text primary key,
+  member_name text not null,
+  amount numeric not null default 0,
+  due numeric not null default 0,
+  method text not null default 'UPI',
+  date date not null default current_date
+);`;
+            copyToClipboard(sql);
+            showToast("Copied SQL Schema!");
+        }
+
+        function getTodayISO() {
+            const d = new Date();
+            return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        }
+
+        function offsetDaysISO(isoStr, days) {
+            const [y, m, d] = isoStr.split('-').map(Number);
+            const date = new Date(y, m - 1, d);
+            date.setDate(date.getDate() + days);
+            return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+        }
+
+        function addMonthsSafe(startDateStr, months) {
+            const [y, m, d] = startDateStr.split('-').map(Number);
+            const date = new Date(Date.UTC(y, m - 1 + months, 1));
+            const lastDay = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 0)).getUTCDate();
+            const targetDay = Math.min(d, lastDay);
+            return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}-${String(targetDay).padStart(2, '0')}`;
+        }
+
+        function getDaysDiff(targetDateStr, baseDateStr = getTodayISO()) {
+            const [y1, m1, d1] = targetDateStr.split('-').map(Number);
+            const [y2, m2, d2] = baseDateStr.split('-').map(Number);
+            return Math.round((Date.UTC(y1, m1 - 1, d1) - Date.UTC(y2, m2 - 1, d2)) / (1000 * 60 * 60 * 24));
+        }
+
+        function formatDateDisplay(isoStr) {
+            if (!isoStr) return '--';
+            const [y, m, d] = isoStr.split('-');
+            const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+            return `${parseInt(d, 10)} ${months[parseInt(m, 10) - 1]} ${y}`;
+        }
+
+        function copyToClipboard(text) {
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(text);
+            } else {
+                const ta = document.createElement('textarea');
+                ta.value = text;
+                document.body.appendChild(ta);
+                ta.select();
+                document.execCommand('copy');
+                document.body.removeChild(ta);
+            }
+        }
+
+        function closeModal(modalId) {
+            document.getElementById(modalId).classList.add('hidden');
+        }
+
+        function showToast(msg) {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = "bg-slate-900 border border-neon/40 text-white px-4 py-3 rounded-2xl shadow-2xl flex items-center gap-3 text-xs font-semibold pointer-events-auto transform translate-y-2 opacity-0 transition-all duration-300";
+            toast.innerHTML = `<i data-lucide="check-circle" class="w-4 h-4 text-neon"></i><span>${msg}</span>`;
+            container.appendChild(toast);
+            lucide.createIcons();
+            setTimeout(() => toast.classList.remove('translate-y-2', 'opacity-0'), 10);
+            setTimeout(() => {
+                toast.classList.add('translate-y-[-10px]', 'opacity-0');
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+    </script>
+</body>
+</html>
